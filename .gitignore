@@ -1,0 +1,8 @@
+STATUS.md
+CLAUDE.md
+.claude/
+memory/
+node_modules/
+dist/
+.env
+.env.local
