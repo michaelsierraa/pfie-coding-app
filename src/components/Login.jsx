@@ -11,7 +11,7 @@ export default function Login() {
     const params = new URLSearchParams({
       client_id: CLIENT_ID,
       state: nonce,
-      scope: 'repo',
+      scope: 'read:user',
     })
     window.location.href = `https://github.com/login/oauth/authorize?${params}`
   }
