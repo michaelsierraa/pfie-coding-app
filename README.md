@@ -1,124 +1,134 @@
-# IRR Coding App
+# pfie-coding-app
 
-A web-based platform for collaborative research data coding with built-in inter-rater reliability (IRR) analysis. Designed for research teams that need multiple coders to independently classify cases from a shared dataset, then measure and reconcile coding disagreements.
+A browser-based coding interface for research teams conducting inter-rater reliability (IRR) assessments. Built to replace manual spreadsheet workflows that produce systematic formatting errors — misspellings, capitalization inconsistencies, non-standard abbreviations — that create false disagreements and require manual correction before IRR can be calculated.
 
 ---
 
-## What this is
+## Purpose
 
-Research projects that rely on human coding — classifying incidents, coding behaviors, labeling text — face a recurring set of logistical and methodological problems:
+Research projects that rely on human coding face a recurring set of problems:
 
-- Coders work independently, often in separate files sent by email, returned in inconsistent formats
-- Free-text entry produces spurious disagreements from misspellings, inconsistent capitalization, and non-standard abbreviations that obscure real disagreements
-- IRR has to be calculated manually after files are collected and reconciled
-- There is no native way for coders to flag uncertain cases for PI review
-- Onboarding new coders and offboarding departing ones requires managing separate file distributions
+- Coders work independently in separate files, returned in inconsistent formats
+- Free-text entry produces spurious disagreements that obscure real ones
+- IRR must be calculated manually after files are collected and reconciled
+- There is no native way to flag uncertain cases for PI review
 - The audit trail for who coded what, when, and what changed is weak or nonexistent
 
-This platform replaces that workflow with a browser-based coding interface that enforces controlled vocabulary, centralizes submissions, calculates IRR automatically, and stores every coding decision as a Git commit.
+This app replaces that workflow with a controlled coding interface that enforces consistent vocabulary via dropdowns, auto-saves draft progress, flags cases for PI review, and produces submissions in a format that passes directly into the IRR analysis pipeline without pre-processing.
 
 ---
 
-## How it works
+## Functionality
 
-Each research project provides an `irr_config.yaml` file in its data repository. This config defines:
-
-- The columns to be coded and their types (controlled vocabulary vs. free text)
-- The valid values for each controlled-vocabulary column
-- The coder pairs assigned to each IRR sample
-- The fields from the source data that are ground truth (used to identify cases)
-- The IRR agreement threshold required to proceed to full coding
-
-The app reads this config and becomes a coding interface tailored to that project — no code changes required to adapt it to a new corpus.
-
-Coders authenticate with their GitHub accounts. Access is controlled by membership in the data repository. Adding or removing a coder means adding or removing them from the repo.
-
-Each coding submission is written back to the data repository as a Git commit via the GitHub API, providing a full audit trail and preserving replicability.
+- **Controlled vocabulary**: all categorical fields use dropdowns, eliminating free-text entry errors
+- **Incident grouping**: cases are grouped by incident (one incident at a time) — multi-officer incidents stay together
+- **Draft persistence**: progress is auto-saved locally; coders can close and return without losing work
+- **Completion tracking**: per-case and per-incident completion status visible in an overview panel
+- **PI review flags**: cases coded `Unknown` on key fields, or with integrity issues, are automatically surfaced for PI review
+- **ToRemove logic**: cases meeting exclusion criteria (off-duty, training, non-suspect-inflicted, etc.) are auto-flagged with confirmation dialogs
+- **Integrity tools**: coders can flag duplicate cases, incorrect incident IDs, and add missing cases found during source research
+- **CSV export**: submissions serialize to a validated CSV whose column order and encoding pass directly into the R IRR script
 
 ---
 
-## Example use case: GVA Police Firearm Assault Coding Project
+## Tech stack
 
-The immediate use case driving this platform is a study of fatal and nonfatal firearm assaults on U.S. police officers, using data from the [Gun Violence Archive](https://www.gunviolencearchive.org/) (GVA).
-
-**The data:** Each row in the dataset represents one officer shot in one incident. A single incident can involve multiple officers (multiple rows). The dataset covers 2024–2025 and contains ~760 rows across ~600 unique incidents.
-
-**The coding task:** Research assistants classify each case on four key columns:
-
-| Column | Type | Values |
-|--------|------|--------|
-| `Status2` | Controlled vocab | `Fatal`, `Non-fatal`, `N/A` |
-| `agencytype` | Controlled vocab | `Local`, `Sheriff`, `State`, `Special (X)`, `Federal`, `Corrections`, `Unknown`, `N/A` |
-| `type_new` | Controlled vocab | `Suspect-inflicted`, `Suspect-inflicted; Accidental`, `Accidental; Blue-On-Blue`, `Accidental; Self-inflicted`, `Self-inflicted; Suicide`, `N/A` |
-| `ToRemove` | Controlled vocab | `0`, `1` |
-
-Plus a set of supplementary fields including agency name, officer rank, and flags for off-duty, training, and blue-on-blue incidents.
-
-**The IRR process:** Before coders work through the full dataset, each coder pair independently codes a 25-incident sample. IRR (percent agreement) is calculated across all key columns. A mean agreement of ≥90% is required before a pair proceeds to full coding batch assignments. Disagreements are reviewed and reconciled by the coder pair before proceeding.
-
-**Why this platform matters for this project:** The current workflow produces systematic formatting errors (misspelled controlled vocab values, wrong capitalization) that create false disagreements and require manual correction before IRR can be calculated. The platform eliminates these at the source by replacing free-text entry with dropdowns.
+| Layer | Choice |
+|-------|--------|
+| Frontend | React 18 + Vite |
+| Hosting | Netlify |
+| Auth | GitHub OAuth (via Cloudflare Worker) |
+| Data access | GitHub Contents API (authenticated) |
+| Config | `irr_config.yaml` — defines columns, vocabulary, coder assignments |
+| CSV handling | PapaParse |
+| IRR analysis | External R script (separate pipeline) |
 
 ---
 
-## Adapting this platform for your project
+## Architecture
 
-This platform is designed to be reusable across research projects. To use it for a new corpus:
+The app is a static single-page application. There is no application server.
 
-1. Create a private GitHub repository for your data
-2. Add an `irr_config.yaml` to that repository defining your columns, vocabulary, coder assignments, and IRR threshold (see [config schema](docs/irr_config_schema.md))
-3. Add your coders as collaborators on the data repository
-4. Point this app at your data repository
+**Authentication** is handled via GitHub OAuth. A stateless Cloudflare Worker acts as the OAuth proxy — it exchanges the authorization code for an access token server-side, keeping the OAuth client secret out of the browser. The Worker also intermediates all write operations, validating that the authenticated user is authorized to write to the requested resource before forwarding the request.
 
-No changes to the platform code are required for projects that fit the standard IRR coding workflow. Future versions will support additional workflows (e.g., adjudication interfaces, multi-round coding, batch coding after IRR clearance).
+**Configuration** is driven entirely by `irr_config.yaml`. This file defines the columns to be coded, their types (controlled vocabulary or free text), valid values for each controlled-vocabulary column, coder pair assignments, and the IRR threshold. The app reads this config at startup and renders a coding interface tailored to the project — no code changes are needed to adapt it to a new dataset.
+
+**Data access** is authenticated. Coders access only the sample assigned to them. Data is fetched at session start and is not persisted beyond the local draft cache (localStorage). On submission, the coded file is written back via the Worker.
+
+**Draft state** is stored in `localStorage` keyed by coder name and sample ID. Drafts are cleared on submission. No coder data is transmitted except at the moment of submission.
+
+---
+
+## Configuration
+
+The app is configured via `irr_config.yaml`. Key fields:
+
+```yaml
+project: "Project name"
+irr_threshold: 90             # Required percent-agreement to proceed
+
+id_column: IncidentID         # Primary key column
+
+ground_truth_fields:          # Source fields — never overwritten by coding
+  - IncidentID
+  - Date
+  - State
+  - Cityorcounty
+
+key_columns:                  # Required fields — must all be set before submission
+  - name: Status2
+    type: controlled_vocab
+    values: [Fatal, Non-fatal, Unknown]
+  # ...
+
+supplementary_columns:        # Optional fields included in the coded output
+  - name: rank
+    type: free_text
+  # ...
+
+samples:
+  - id: 1
+    label: "Sample 1"
+    coder_a: "Coder Name"
+    coder_b: "Coder Name"
+    coder_a_github: github_username   # Phase 2
+    coder_b_github: github_username   # Phase 2
+
+file_pattern: "irr_sample_{id}_coder{ab}.csv"
+```
 
 ---
 
 ## Project structure
 
 ```
-irr-coding-app/
-├── README.md
-├── docs/
-│   ├── irr_config_schema.md       # Full schema reference for irr_config.yaml
-│   ├── architecture.md            # Auth flow, GitHub API usage, data storage model
-│   └── adapting.md                # Guide for researchers adapting this to a new project
+pfie-coding-app/
+├── public/
+│   └── irr_config.yaml              # Project config (column defs, coder assignments)
 ├── src/
-│   ├── app/                       # React app (Vite)
-│   │   ├── components/
-│   │   │   ├── CodingRow.jsx      # Per-row coding interface (dropdowns + free text)
-│   │   │   ├── SampleTable.jsx    # Full sample view for a coder
-│   │   │   ├── Dashboard.jsx      # PI dashboard: IRR live, flags, submission status
-│   │   │   └── ReconcileView.jsx  # Side-by-side disagreement reconciliation
-│   │   ├── lib/
-│   │   │   ├── github.js          # GitHub Contents API read/write
-│   │   │   ├── irr.js             # Percent agreement calculation (client-side)
-│   │   │   └── config.js          # irr_config.yaml parser
-│   │   └── main.jsx
-│   └── auth/
-│       └── worker.js              # Cloudflare Worker: GitHub OAuth token exchange
-├── .github/
-│   └── workflows/
-│       └── irr_report.yml         # GitHub Action: runs IRR calc on coder submission, commits report
-└── public/
+│   ├── App.jsx                      # Top-level state machine: Login → CodingView
+│   ├── App.css
+│   ├── components/
+│   │   ├── Login.jsx                # Auth entry point
+│   │   ├── SampleTable.jsx          # Main coding UI — incident navigation, overview
+│   │   ├── CodingRow.jsx            # Per-case card: source fields + coded fields
+│   │   ├── IncidentOverview.jsx     # Right-drawer overview table (sortable, filterable)
+│   │   └── NewIncidentForm.jsx      # Form for adding a case with no source record
+│   ├── hooks/
+│   │   ├── useConfig.js             # Fetches and parses irr_config.yaml
+│   │   ├── useCoderSession.js       # Resolves coder → assigned sample + file URL
+│   │   └── useSampleData.js         # Loads CSV, merges draft, exposes save/submit
+│   └── lib/
+│       ├── config.js                # YAML → normalized config object
+│       ├── csv.js                   # PapaParse wrappers: parse, serialize, download
+│       └── storage.js               # localStorage draft persistence
+├── index.html
+├── vite.config.js
+└── package.json
 ```
 
 ---
 
-## Tech stack
+## Use case
 
-| Layer | Choice | Reason |
-|---|---|---|
-| Frontend | React (Vite) | Component model suits per-row coding UI |
-| Hosting | Netlify (free tier) | Auto-deploys from GitHub; no server to maintain |
-| Auth | GitHub OAuth | Repo membership = access; no separate user system |
-| OAuth proxy | Cloudflare Worker (free) | Handles GitHub OAuth secret server-side |
-| Data storage | GitHub Contents API | Every submission is a Git commit; full audit trail |
-| IRR calculation | Client-side JS + GitHub Actions | Instant local preview; authoritative report on push |
-
----
-
-## Status
-
-Early development. The IRR methodology, config schema, and analysis pipeline are defined and battle-tested on the GVA project. Frontend and auth infrastructure are next.
-
-See [docs/architecture.md](docs/architecture.md) for the full design.
+Built for a study of fatal and nonfatal firearm assaults on U.S. police officers using data from the [Gun Violence Archive](https://www.gunviolencearchive.org/). Four coder pairs independently code IRR samples across key classification variables before proceeding to full dataset coding.

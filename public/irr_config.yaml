@@ -1,0 +1,102 @@
+project: "pfie_GVA — Fatal & Nonfatal Firearm Assaults on Police (2024-2025 wave)"
+irr_threshold: 90
+
+ground_truth_fields:
+  - IncidentID
+  - Date
+  - State
+  - Cityorcounty
+
+id_column: IncidentID
+
+key_columns:
+  - name: Status2
+    type: controlled_vocab
+    values: [Fatal, Non-fatal, Unknown]
+
+  - name: agencytype
+    type: controlled_vocab
+    values: [Local, Sheriff, State, "Special (X)", Federal, Corrections, Unknown]
+    notes: >
+      "Special (X)" covers transit, school/ISD, university, tribal, airport, park, and other
+      special-jurisdiction agencies. The parenthetical should name the type, e.g. Special (School).
+
+  - name: type_new
+    type: controlled_vocab
+    values:
+      - Suspect-inflicted
+      - "Self-inflicted; Accidental"
+      - "Self-inflicted; Intentional/Suicide"
+      - "Self-inflicted; Unknown"
+      - "Blue-on-blue; Accidental"
+      - "Blue-on-blue; Suspect-inflicted"
+      - "Blue-on-blue; Unknown"
+      - Unknown
+
+  - name: ToRemove
+    type: controlled_vocab
+    values: ["0", "1"]
+    notes: >
+      ToRemove = 1 when any of the following apply: notactiveswornlocalstate = 1,
+      offduty = 1, training = 1, blueonblue = 1, or type_new is not Suspect-inflicted.
+
+supplementary_columns:
+  - name: notactiveswornlocalstate
+    type: controlled_vocab
+    values: ["0", "1", "Unknown"]
+  - name: rank
+    type: free_text
+  - name: agencyname
+    type: free_text
+  - name: offduty
+    type: controlled_vocab
+    values: ["0", "1", "Unknown"]
+  - name: training
+    type: controlled_vocab
+    values: ["0", "1", "Unknown"]
+  - name: blueonblue
+    type: controlled_vocab
+    values: ["0", "1", "Unknown"]
+  - name: Duplicate
+    type: controlled_vocab
+    values: ["0", "1"]
+  - name: duplicate_of
+    type: free_text
+  - name: duplicate_type
+    type: controlled_vocab
+    values: ["row", "incident"]
+  - name: incident_id_changed
+    type: controlled_vocab
+    values: ["0", "1"]
+  - name: incident_change_type
+    type: controlled_vocab
+    values: ["reassign", "new_id"]
+  - name: reassign_to_id
+    type: free_text
+  - name: original_id
+    type: free_text
+
+samples:
+  - id: 1
+    label: "Sample 1"
+    coder_a: "Alexandria Guzman"
+    coder_b: "Sarah Rimawi"
+  - id: 2
+    label: "Sample 2"
+    coder_a: "Jillian York"
+    coder_b: "Elif Painaik"
+  - id: 3
+    label: "Sample 3"
+    coder_a: "Andrea Abrams"
+    coder_b: "Nicole He"
+  - id: 4
+    label: "Sample 4"
+    coder_a: "Noah Keany"
+    coder_b: "Esther Sophia Sanchez"
+
+coded_samples_dir: data/irr/irr_coded_samples
+file_pattern: "irr_sample_{id}_coder{ab}.csv"
+precorrection_backup_dir: data/irr/irr_coded_samples_precorrection
+output_dir: data/irr/irr_sample_analysis_results
+report_filename_pattern: "irr_sample_{id}_analysis"
+r_script: scripts/04_irr_calculations.R

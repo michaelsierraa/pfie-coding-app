@@ -6,3 +6,9 @@ node_modules/
 dist/
 .env
 .env.local
+
+# Local dev data — private research data, never commit
+public/mock_data/
+
+# Outdated onboarding doc
+public/GVA_Project_Onboarding.pdf
