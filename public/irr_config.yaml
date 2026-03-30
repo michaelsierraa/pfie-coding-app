@@ -85,15 +85,20 @@ samples:
   - id: 2
     label: "Sample 2"
     coder_a: "Jillian York"
+    coder_a_github: jillianyork622
     coder_b: "Elif Painaik"
+    coder_b_github: epainaik
   - id: 3
     label: "Sample 3"
     coder_a: "Andrea Abrams"
+    coder_a_github: andreaa245
     coder_b: "Nicole He"
+    coder_b_github: nxh73
   - id: 4
     label: "Sample 4"
     coder_a: "Noah Keany"
     coder_b: "Esther Sophia Sanchez"
+    coder_b_github: esthersophia23
 
 coded_samples_dir: data/irr/irr_coded_samples
 file_pattern: "irr_sample_{id}_coder{ab}.csv"
