@@ -55,7 +55,7 @@ export function isRowFlaggedForPI(row) {
  * Phase 1: fetches from a local URL (public/mock_data/).
  * Phase 2: swap fileUrl for a GitHub Contents API fetch.
  */
-export function useSampleData(fileUrl, filename, coderName, sampleId, config, token = null) {
+export function useSampleData(fileUrl, filename, coderName, sampleId, config, token = null, role = null) {
   const [rows, setRows] = useState([])
   const [columnOrder, setColumnOrder] = useState([])
   const [loading, setLoading] = useState(true)
@@ -72,8 +72,11 @@ export function useSampleData(fileUrl, filename, coderName, sampleId, config, to
       setLoading(true)
       setError(null)
       try {
+        const sampleUrl = token
+          ? `${WORKER_URL}/sample${sampleId && role ? `?sampleId=${sampleId}&role=${role}` : ''}`
+          : fileUrl
         const res = token
-          ? await fetch(`${WORKER_URL}/sample`, { headers: { Authorization: `Bearer ${token}` } })
+          ? await fetch(sampleUrl, { headers: { Authorization: `Bearer ${token}` } })
           : await fetch(fileUrl)
         if (!res.ok) throw new Error(`Failed to load sample CSV: ${res.status}`)
         const text = await res.text()

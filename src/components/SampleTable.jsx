@@ -39,6 +39,7 @@ export default function SampleTable({
   submitCoding,
   lastSaved,
   onLogout,
+  onPIBack,
 }) {
   const [submitAttempted, setSubmitAttempted] = useState(false)
   const [rowCountWarning, setRowCountWarning] = useState(null)
@@ -300,7 +301,10 @@ export default function SampleTable({
             Coding Guide ↗
           </a>
           <button className="btn btn-secondary" onClick={handleSave}>Save</button>
-          <button className="btn btn-secondary" onClick={onLogout}>Switch Coder</button>
+          {onPIBack
+            ? <button className="btn btn-secondary" onClick={onPIBack}>← Back to coder list</button>
+            : <button className="btn btn-secondary" onClick={onLogout}>Switch Coder</button>
+          }
           <button className="btn btn-warning" onClick={handleNewIncidentClick}>
             + New Incident
           </button>

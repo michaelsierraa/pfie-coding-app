@@ -94,6 +94,10 @@ export function parseConfig(yamlText) {
     return null
   }
 
+  function isPIUser(githubLogin) {
+    return !!raw.pi_github_username && githubLogin === raw.pi_github_username
+  }
+
   // ── Phase 2 validation ────────────────────────────────────────────────────
   // Warn if github_username fields are partially filled (some present, some missing).
   // In Phase 1 all are null, so this is a no-op.
@@ -126,5 +130,6 @@ export function parseConfig(yamlText) {
     getFilePattern,
     getCoderAssignment,
     getCoderByGithub,
+    isPIUser,
   }
 }

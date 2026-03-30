@@ -112,12 +112,18 @@ function AuthenticatedApp({ token, onLogout }) {
 
   const { config, loading: configLoading, error: configError } = useConfig(fetchFn)
 
-  // Once config is loaded, resolve GitHub identity → display name
+  const [isPI, setIsPI] = useState(false)
+
+  // Once config is loaded, resolve GitHub identity → display name (or PI flag)
   useEffect(() => {
     if (!config) return
     getAuthenticatedUser(token)
       .then(user => {
         if (!user) throw new Error('Could not verify GitHub identity.')
+        if (config.isPIUser(user.login)) {
+          setIsPI(true)
+          return
+        }
         const assignment = config.getCoderByGithub(user.login)
         if (!assignment) {
           throw new Error(
@@ -129,7 +135,7 @@ function AuthenticatedApp({ token, onLogout }) {
       .catch(e => setIdentityError(e.message))
   }, [config, token])
 
-  if (configLoading || (!coderName && !identityError && !configError)) {
+  if (configLoading || (!coderName && !isPI && !identityError && !configError)) {
     return <div className="loading">Loading…</div>
   }
 
@@ -157,13 +163,66 @@ function AuthenticatedApp({ token, onLogout }) {
     )
   }
 
+  // PI: show name picker if no coder selected yet
+  if (isPI && !coderName) {
+    return (
+      <PICoderPicker
+        config={config}
+        onSelect={setCoderName}
+        onLogout={onLogout}
+      />
+    )
+  }
+
   return (
     <CodingView
       coderName={coderName}
       config={config}
       token={token}
       onLogout={onLogout}
+      isPI={isPI}
+      onPIBack={isPI ? () => setCoderName(null) : null}
     />
+  )
+}
+
+function PICoderPicker({ config, onSelect, onLogout }) {
+  const [selected, setSelected] = useState('')
+  const coderNames = Object.keys(config.coderMap).sort()
+
+  return (
+    <div className="login-wrapper">
+      <div className="login-card">
+        <h1>IRR Coding App</h1>
+        <p>Signed in as PI. Select a coder to view their sample.</p>
+        <label htmlFor="pi-coder-select">Coder</label>
+        <select
+          id="pi-coder-select"
+          value={selected}
+          onChange={e => setSelected(e.target.value)}
+        >
+          <option value="">— Select a coder —</option>
+          {coderNames.map(name => (
+            <option key={name} value={name}>{name}</option>
+          ))}
+        </select>
+        <button
+          className="btn btn-primary"
+          disabled={!selected}
+          onClick={() => onSelect(selected)}
+          style={{ width: '100%', marginTop: '1rem' }}
+        >
+          View Sample
+        </button>
+        <button
+          className="btn btn-secondary"
+          onClick={onLogout}
+          style={{ width: '100%', marginTop: '0.5rem' }}
+        >
+          Sign out
+        </button>
+      </div>
+    </div>
   )
 }
 
@@ -171,7 +230,7 @@ function AuthenticatedApp({ token, onLogout }) {
  * CodingView — loads the coder's sample data and renders the SampleTable.
  * Separated so useSampleData only runs after login.
  */
-function CodingView({ coderName, config, token, onLogout }) {
+function CodingView({ coderName, config, token, onLogout, isPI, onPIBack }) {
   const session = useCoderSession(coderName, config)
 
   const {
@@ -189,7 +248,8 @@ function CodingView({ coderName, config, token, onLogout }) {
     coderName,
     session?.sampleId ?? null,
     config,
-    token
+    token,
+    session?.role ?? null
   )
 
   if (!session) {
@@ -235,6 +295,7 @@ function CodingView({ coderName, config, token, onLogout }) {
       submitCoding={submitCoding}
       lastSaved={lastSaved}
       onLogout={onLogout}
+      onPIBack={onPIBack}
     />
   )
 }
