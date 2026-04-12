@@ -5,6 +5,7 @@ import { useSampleData } from './hooks/useSampleData.js'
 import { getAuthenticatedUser } from './lib/github.js'
 import Login from './components/Login.jsx'
 import SampleTable from './components/SampleTable.jsx'
+import PIReviewDashboard from './components/PIReviewDashboard.jsx'
 
 const WORKER_URL = import.meta.env.VITE_WORKER_URL
 
@@ -113,6 +114,8 @@ function AuthenticatedApp({ token, onLogout }) {
   const { config, loading: configLoading, error: configError } = useConfig(fetchFn)
 
   const [isPI, setIsPI] = useState(false)
+  // 'home' = PIDashboard, 'review' = PIReviewDashboard; coderName being set means coder view
+  const [piView, setPiView] = useState('home')
 
   // Once config is loaded, resolve GitHub identity → display name (or PI flag)
   useEffect(() => {
@@ -163,12 +166,39 @@ function AuthenticatedApp({ token, onLogout }) {
     )
   }
 
-  // PI: show name picker if no coder selected yet
-  if (isPI && !coderName) {
+  // PI with a coder selected → coder view (onPIBack returns to wherever PI came from)
+  if (isPI && coderName) {
     return (
-      <PICoderPicker
+      <CodingView
+        coderName={coderName}
         config={config}
-        onSelect={setCoderName}
+        token={token}
+        onLogout={onLogout}
+        isPI={isPI}
+        onPIBack={() => setCoderName(null)}
+      />
+    )
+  }
+
+  // PI review queue
+  if (isPI && piView === 'review') {
+    return (
+      <PIReviewDashboard
+        config={config}
+        token={token}
+        onBack={() => setPiView('home')}
+        onViewCoder={name => setCoderName(name)}
+      />
+    )
+  }
+
+  // PI home — coder picker + review queue entry
+  if (isPI) {
+    return (
+      <PIDashboard
+        config={config}
+        onSelectCoder={setCoderName}
+        onOpenReview={() => setPiView('review')}
         onLogout={onLogout}
       />
     )
@@ -180,13 +210,13 @@ function AuthenticatedApp({ token, onLogout }) {
       config={config}
       token={token}
       onLogout={onLogout}
-      isPI={isPI}
-      onPIBack={isPI ? () => setCoderName(null) : null}
+      isPI={false}
+      onPIBack={null}
     />
   )
 }
 
-function PICoderPicker({ config, onSelect, onLogout }) {
+function PIDashboard({ config, onSelectCoder, onOpenReview, onLogout }) {
   const [selected, setSelected] = useState('')
   const coderNames = Object.keys(config.coderMap).sort()
 
@@ -194,30 +224,50 @@ function PICoderPicker({ config, onSelect, onLogout }) {
     <div className="login-wrapper">
       <div className="login-card">
         <h1>IRR Coding App</h1>
-        <p>Signed in as PI. Select a coder to view their sample.</p>
-        <label htmlFor="pi-coder-select">Coder</label>
-        <select
-          id="pi-coder-select"
-          value={selected}
-          onChange={e => setSelected(e.target.value)}
-        >
-          <option value="">— Select a coder —</option>
-          {coderNames.map(name => (
-            <option key={name} value={name}>{name}</option>
-          ))}
-        </select>
-        <button
-          className="btn btn-primary"
-          disabled={!selected}
-          onClick={() => onSelect(selected)}
-          style={{ width: '100%', marginTop: '1rem' }}
-        >
-          View Sample
-        </button>
+        <p style={{ fontWeight: 600, marginBottom: '0.25rem' }}>Signed in as PI</p>
+
+        <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '1rem', marginTop: '0.75rem' }}>
+          <p style={{ fontSize: '0.875rem', color: '#555', marginBottom: '0.75rem' }}>
+            Review flagged rows across all coders and pairs.
+          </p>
+          <button
+            className="btn btn-primary"
+            onClick={onOpenReview}
+            style={{ width: '100%' }}
+          >
+            PI Review Queue →
+          </button>
+        </div>
+
+        <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '1rem', marginTop: '1rem' }}>
+          <p style={{ fontSize: '0.875rem', color: '#555', marginBottom: '0.5rem' }}>
+            View a coder's sample exactly as they see it.
+          </p>
+          <label htmlFor="pi-coder-select">Coder</label>
+          <select
+            id="pi-coder-select"
+            value={selected}
+            onChange={e => setSelected(e.target.value)}
+          >
+            <option value="">— Select a coder —</option>
+            {coderNames.map(name => (
+              <option key={name} value={name}>{name}</option>
+            ))}
+          </select>
+          <button
+            className="btn btn-secondary"
+            disabled={!selected}
+            onClick={() => onSelectCoder(selected)}
+            style={{ width: '100%', marginTop: '0.75rem' }}
+          >
+            View Coder Sample →
+          </button>
+        </div>
+
         <button
           className="btn btn-secondary"
           onClick={onLogout}
-          style={{ width: '100%', marginTop: '0.5rem' }}
+          style={{ width: '100%', marginTop: '1rem' }}
         >
           Sign out
         </button>

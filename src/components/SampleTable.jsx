@@ -379,8 +379,14 @@ export default function SampleTable({
                 const detail = (row.CaseSummary && row.CaseSummary !== 'NA' && row.CaseSummary !== PENDING)
                   ? row.CaseSummary
                   : '—'
+                const groupIdx = incidentGroups.findIndex(g => g.indices.includes(idx))
                 return (
-                  <tr key={idx}>
+                  <tr
+                    key={idx}
+                    style={{ cursor: groupIdx !== -1 ? 'pointer' : undefined }}
+                    title={groupIdx !== -1 ? 'Click to navigate to this incident' : undefined}
+                    onClick={() => { if (groupIdx !== -1) navigateTo(groupIdx) }}
+                  >
                     <td>{idx + 1}</td>
                     <td><code>{row[config.idColumn]}</code></td>
                     <td>{flags.join(', ')}</td>
