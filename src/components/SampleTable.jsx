@@ -220,7 +220,6 @@ export default function SampleTable({
   }
 
   function handleSubmit() {
-    if (onPIBack) return   // PI viewing a coder's sample — never submit on their behalf
     setSubmitAttempted(true)
     if (!allDone) return
     const result = submitCoding()
@@ -352,22 +351,20 @@ export default function SampleTable({
           <button className="btn btn-warning" onClick={handleNewIncidentClick} style={{ marginLeft: 'auto' }}>
             + New Incident
           </button>
-          {!onPIBack && (
-            <button
-              className="btn"
-              onClick={() => allDone ? setShowFinalizeModal(true) : setShowBlockedModal(true)}
-              style={{
-                backgroundColor: allDone ? '#b8860b' : '#ccc',
-                color: allDone ? '#fff' : '#888',
-                fontWeight: 700,
-                letterSpacing: '0.06em',
-                cursor: allDone ? 'pointer' : 'not-allowed',
-              }}
-            >
-              <i className="bi bi-lock-fill" />
-              FINALIZE
-            </button>
-          )}
+          <button
+            className="btn"
+            onClick={() => allDone ? setShowFinalizeModal(true) : setShowBlockedModal(true)}
+            style={{
+              backgroundColor: allDone ? '#b8860b' : '#ccc',
+              color: allDone ? '#fff' : '#888',
+              fontWeight: 700,
+              letterSpacing: '0.06em',
+              cursor: allDone ? 'pointer' : 'not-allowed',
+            }}
+          >
+            <i className="bi bi-lock-fill" />
+            FINALIZE
+          </button>
         </div>
 
         <div className="header-progress-bar">

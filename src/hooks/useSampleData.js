@@ -55,7 +55,7 @@ export function isRowFlaggedForPI(row) {
  * Phase 1: fetches from a local URL (public/mock_data/).
  * Phase 2: swap fileUrl for a GitHub Contents API fetch.
  */
-export function useSampleData(fileUrl, filename, coderName, sampleId, config, token = null, role = null) {
+export function useSampleData(fileUrl, filename, coderName, sampleId, config, token = null, role = null, isPI = false) {
   const [rows, setRows] = useState([])
   const [columnOrder, setColumnOrder] = useState([])
   const [loading, setLoading] = useState(true)
@@ -95,6 +95,7 @@ export function useSampleData(fileUrl, filename, coderName, sampleId, config, to
           ...config.supplementaryColumns.map(c => c.name),
           'CaseSummary',
           'Notes',
+          'record_added',  // system field coders can set via Add Case
         ])
 
         const initialRows = sourceRows.map(row => {
@@ -115,9 +116,11 @@ export function useSampleData(fileUrl, filename, coderName, sampleId, config, to
 
         // ── Merge saved draft ─────────────────────────────────────────────
         // Match by array index — IncidentID is NOT unique (multi-officer incidents).
-        // Source field values are never overwritten.
+        // Only coded (project-added) fields are merged from the draft; source GVA
+        // fields (IncidentID, Date, State, Name, etc.) always come from the current
+        // source file so a stale draft can never corrupt row identity.
         const draft = loadDraft(coderName, sampleId)
-        const finalRows = draft ? mergeDraftByIndex(initialRows, draft) : initialRows
+        const finalRows = draft ? mergeDraftByIndex(initialRows, draft, codedFieldNames) : initialRows
 
         setRows(finalRows)
       } catch (e) {
@@ -133,13 +136,23 @@ export function useSampleData(fileUrl, filename, coderName, sampleId, config, to
 
   /**
    * Merge draft rows into source rows by array index.
-   * Draft values overwrite source values; extra draft rows (record_added) are appended.
+   * Only coded (project-added) fields are taken from the draft — source GVA fields
+   * (IncidentID, Date, State, City, Name, etc.) are always preserved from the
+   * current source file.  Extra draft rows (record_added = '1') are appended.
+   *
+   * @param {object[]} sourceRows   - Rows loaded from the current source CSV
+   * @param {object[]} draftRows    - Rows loaded from localStorage
+   * @param {Set<string>} codedFields - Field names that may be overwritten
    */
-  function mergeDraftByIndex(sourceRows, draftRows) {
+  function mergeDraftByIndex(sourceRows, draftRows, codedFields) {
     const merged = sourceRows.map((sourceRow, i) => {
       const draftRow = draftRows[i]
       if (!draftRow) return sourceRow
-      return { ...sourceRow, ...draftRow }
+      const result = { ...sourceRow }
+      for (const field of codedFields) {
+        if (field in draftRow) result[field] = draftRow[field]
+      }
+      return result
     })
     // Append any extra rows from the draft (record_added rows added by the coder)
     if (draftRows.length > sourceRows.length) {
@@ -224,13 +237,19 @@ export function useSampleData(fileUrl, filename, coderName, sampleId, config, to
     const csvString = serializeCSV(exportRows, columnOrder)
 
     if (token) {
+      // PI finalizing from coder-view writes to pi_reviewed_dir (never irr_coded_samples).
+      // Coders write to coded_samples_dir (the default 'coder' destination).
+      const body = isPI
+        ? { content: csvString, destination: 'pi_full', sampleId, role }
+        : { content: csvString }
+
       return fetch(`${WORKER_URL}/write`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ content: csvString }),
+        body: JSON.stringify(body),
       })
         .then(r => r.json())
         .then(data => {
@@ -245,7 +264,7 @@ export function useSampleData(fileUrl, filename, coderName, sampleId, config, to
     downloadCSV(filename, csvString)
     markSubmitted(coderName, sampleId)
     return null
-  }, [rows, columnOrder, filename, coderName, sampleId, token])
+  }, [rows, columnOrder, filename, coderName, sampleId, token, isPI, role])
 
   return {
     rows,

@@ -299,7 +299,8 @@ function CodingView({ coderName, config, token, onLogout, isPI, onPIBack }) {
     session?.sampleId ?? null,
     config,
     token,
-    session?.role ?? null
+    session?.role ?? null,
+    isPI
   )
 
   if (!session) {
