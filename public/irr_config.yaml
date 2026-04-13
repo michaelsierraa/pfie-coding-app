@@ -81,7 +81,9 @@ samples:
   - id: 1
     label: "Sample 1"
     coder_a: "Alexandria Guzman"
+    coder_a_github: AlexandriaG1
     coder_b: "Sarah Rimawi"
+    coder_b_github: sarahrimawi
   - id: 2
     label: "Sample 2"
     coder_a: "Jillian York"
@@ -97,6 +99,7 @@ samples:
   - id: 4
     label: "Sample 4"
     coder_a: "Noah Keany"
+    coder_a_github: nkeanycoder
     coder_b: "Esther Sophia Sanchez"
     coder_b_github: esthersophia23
 
