@@ -3,7 +3,7 @@ import CodingRow from './CodingRow.jsx'
 import NewIncidentForm from './NewIncidentForm.jsx'
 import IncidentOverview from './IncidentOverview.jsx'
 import { isSubmitted } from '../lib/storage.js'
-import { isRowFlaggedForPI, UNKNOWN_REVIEW_FIELDS, isRowComplete } from '../hooks/useSampleData.js'
+import { isRowFlaggedForPI, isRowComplete } from '../hooks/useSampleData.js'
 
 const PENDING = 'PENDING'
 
@@ -47,8 +47,11 @@ export default function SampleTable({
   const [showNewIncidentForm, setShowNewIncidentForm] = useState(false)
   const [currentIncidentIdx, setCurrentIncidentIdx] = useState(0)
   const [showOverview, setShowOverview] = useState(false)
+  const [showFinalizeModal, setShowFinalizeModal] = useState(false)
+  const [showBlockedModal, setShowBlockedModal] = useState(false)
   // Set after adding a new incident so we navigate to it once groups update
   const [pendingNavId, setPendingNavId] = useState(null)
+  const [history, setHistory] = useState([])
 
   const alreadySubmitted = isSubmitted(coderName, session.sampleId)
 
@@ -86,8 +89,14 @@ export default function SampleTable({
   const addedRows     = rows.filter(r => r.record_added === '1')
   const completedCount = sourceRows.filter(r => isRowComplete(r)).length
   const totalCount    = sourceRows.length
+  // A row is "done" when fully complete OR flagged for PI review
+  const allDone       = totalCount > 0 && sourceRows.every(r => isRowComplete(r) || isRowFlaggedForPI(r))
   const allComplete   = completedCount === totalCount && totalCount > 0
-  const incompleteCount = totalCount - completedCount
+  const incompleteCount = sourceRows.filter(r => !isRowComplete(r) && !isRowFlaggedForPI(r)).length
+  const completedIncidentCount = incidentGroups.filter(g => {
+    const src = g.rows.filter(r => r.record_added !== '1')
+    return src.length > 0 && src.every(r => isRowComplete(r))
+  }).length
 
   // ── Per-incident status ───────────────────────────────────────────────────
   const currentSourceRows    = currentGroup.rows.filter(r => r.record_added !== '1')
@@ -111,11 +120,6 @@ export default function SampleTable({
     return hasFlag && !hasNotes
   })
 
-  // ── PI review queue (global) ──────────────────────────────────────────────
-  const piReviewRows = rows
-    .map((row, idx) => ({ row, idx }))
-    .filter(({ row }) => isRowFlaggedForPI(row))
-
   // ── Navigation ────────────────────────────────────────────────────────────
   function navigateTo(idx) {
     saveProgress()
@@ -123,8 +127,21 @@ export default function SampleTable({
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
+  // ── Undo ──────────────────────────────────────────────────────────────────
+  function pushHistory() {
+    setHistory(prev => [...prev.slice(-29), rows])
+  }
+
+  function handleUndo() {
+    if (history.length === 0) return
+    const snapshot = history[history.length - 1]
+    setHistory(prev => prev.slice(0, -1))
+    setRows(snapshot)
+  }
+
   // ── Row handlers (all receive global indices) ─────────────────────────────
   function handleRowChange(globalIdx, fieldName, value) {
+    pushHistory()
     setRows(prev => {
       const updated = [...prev]
       updated[globalIdx] = { ...updated[globalIdx], [fieldName]: value }
@@ -143,6 +160,8 @@ export default function SampleTable({
       `This row will be flagged for PI review.`
     )
     if (!confirmed) return
+
+    pushHistory()
 
     const newRow = { ...sourceRow }
     newRow.record_added = '1'
@@ -174,10 +193,12 @@ export default function SampleTable({
       `Delete the added case for Incident ID ${incidentId}? This cannot be undone.`
     )
     if (!confirmed) return
+    pushHistory()
     setRows(prev => prev.filter((_, i) => i !== globalIdx))
   }
 
   function handleAddNewIncident(newRow) {
+    pushHistory()
     setRows(prev => [...prev, newRow])
     setShowNewIncidentForm(false)
     setPendingNavId(newRow[config.idColumn])
@@ -199,8 +220,9 @@ export default function SampleTable({
   }
 
   function handleSubmit() {
+    if (onPIBack) return   // PI viewing a coder's sample — never submit on their behalf
     setSubmitAttempted(true)
-    if (!allComplete) return
+    if (!allDone) return
     const result = submitCoding()
     if (result?.warning) {
       setRowCountWarning(result.warning)
@@ -248,10 +270,10 @@ export default function SampleTable({
           ← Prev
         </button>
         <div className="incident-nav-center">
-          <span className="incident-nav-pos">
-            {safeIdx + 1} <span className="incident-nav-of">of</span> {totalIncidents}
+          <span className="incident-nav-id">
+            <span style={{ fontSize: '0.72em', fontWeight: 400, color: '#888', letterSpacing: '0.05em', textTransform: 'uppercase' }}>Incident ID</span>
+            {' '}{currentGroup.id}
           </span>
-          <span className="incident-nav-id">{currentGroup.id}</span>
           {showStatus && <IncidentStatusPill />}
         </div>
         <button
@@ -270,44 +292,82 @@ export default function SampleTable({
 
       {/* ── Sticky header ── */}
       <div className="table-header">
-        <div>
-          <h2>{coderName} — {session.label}</h2>
-          {session.partnerName && (
-            <div style={{ fontSize: '0.8rem', color: '#666' }}>Partner: {session.partnerName}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', width: '100%', minWidth: 0 }}>
+          <div style={{ minWidth: 0 }}>
+            <h2 style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{coderName} — {session.label}</h2>
+            {session.partnerName && (
+              <div style={{ fontSize: '0.8rem', color: '#666' }}>Partner: {session.partnerName}</div>
+            )}
+          </div>
+          {onPIBack && (
+            <button
+              className="btn btn-secondary"
+              onClick={onPIBack}
+              style={{ marginLeft: 'auto', whiteSpace: 'nowrap' }}
+            >
+              ← Back to coder list
+            </button>
           )}
         </div>
 
-        <div className="progress-badge">
-          <span>{completedCount}</span> / {totalCount} rows complete
-          {addedRows.length > 0 && (
-            <span style={{ marginLeft: '0.75rem', color: '#c05621' }}>
-              + {addedRows.length} added
-            </span>
-          )}
+        <div style={{ textAlign: 'center' }}>
+          <span className="progress-badge">
+            <span>{completedCount}</span> / {totalCount} rows complete
+            {addedRows.length > 0 && (
+              <span style={{ marginLeft: '0.75rem', color: '#c05621' }}>
+                + {addedRows.length} added
+              </span>
+            )}
+            <span style={{ margin: '0 0.75rem', opacity: 0.4 }}>·</span>
+            <span>{completedIncidentCount}</span> / {totalIncidents} incidents complete
+          </span>
         </div>
 
         {saveLabel && <div className="autosave-indicator">{saveLabel}</div>}
 
         <div className="table-actions">
-          <button className="btn btn-secondary" onClick={() => setShowOverview(true)}>
-            Overview
-          </button>
-          <a
-            href="/GVA_Project_Onboarding.pdf"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="coding-guide-link"
+          <button
+            className="btn btn-secondary"
+            onClick={() => setShowOverview(true)}
+            style={{ border: '2px solid #3b82f6' }}
           >
-            Coding Guide ↗
-          </a>
-          <button className="btn btn-secondary" onClick={handleSave}>Save</button>
-          {onPIBack
-            ? <button className="btn btn-secondary" onClick={onPIBack}>← Back to coder list</button>
-            : <button className="btn btn-secondary" onClick={onLogout}>Switch Coder</button>
-          }
-          <button className="btn btn-warning" onClick={handleNewIncidentClick}>
+            <i className="bi bi-list-check" style={{ marginRight: '0.35rem' }} />
+            Status Tracker
+          </button>
+          <button className="btn btn-primary" onClick={handleSave}>
+            <i className="bi bi-floppy-fill" style={{ marginRight: '0.35rem' }} />
+            Save
+          </button>
+          <button
+            className="btn btn-secondary"
+            onClick={handleUndo}
+            disabled={history.length === 0}
+            title="Undo last change"
+          >
+            ↩ Undo
+          </button>
+          {!onPIBack && (
+            <button className="btn btn-secondary" onClick={onLogout}>Switch Coder</button>
+          )}
+          <button className="btn btn-warning" onClick={handleNewIncidentClick} style={{ marginLeft: 'auto' }}>
             + New Incident
           </button>
+          {!onPIBack && (
+            <button
+              className="btn"
+              onClick={() => allDone ? setShowFinalizeModal(true) : setShowBlockedModal(true)}
+              style={{
+                backgroundColor: allDone ? '#b8860b' : '#ccc',
+                color: allDone ? '#fff' : '#888',
+                fontWeight: 700,
+                letterSpacing: '0.06em',
+                cursor: allDone ? 'pointer' : 'not-allowed',
+              }}
+            >
+              <i className="bi bi-lock-fill" />
+              FINALIZE
+            </button>
+          )}
         </div>
 
         <div className="header-progress-bar">
@@ -338,10 +398,10 @@ export default function SampleTable({
         </div>
       )}
 
-      {submitAttempted && !allComplete && (
+      {submitAttempted && !allDone && (
         <div className="alert alert-error" style={{ margin: '0.75rem 1.25rem 0' }}>
-          {incompleteCount} row{incompleteCount !== 1 ? 's are' : ' is'} incomplete.
-          All 10 standard fields must be answered before submitting.
+          {incompleteCount} row{incompleteCount !== 1 ? 's are' : ' is'} not yet complete or PI flagged.
+          All rows must be complete or flagged for PI review before submitting.
         </div>
       )}
 
@@ -354,50 +414,6 @@ export default function SampleTable({
         </div>
       )}
 
-      {/* ── PI Review Queue (global) ── */}
-      {piReviewRows.length > 0 && (
-        <div className="pi-review-panel">
-          <div className="pi-review-header">
-            PI Review Queue — {piReviewRows.length} row{piReviewRows.length !== 1 ? 's' : ''} flagged
-          </div>
-          <table className="pi-review-table">
-            <thead>
-              <tr>
-                <th>Row</th>
-                <th>IncidentID</th>
-                <th>Flag</th>
-                <th>Case Summary / Notes</th>
-              </tr>
-            </thead>
-            <tbody>
-              {piReviewRows.map(({ row, idx }) => {
-                const flags = []
-                if (row.record_added === '1') flags.push('Added')
-                if (row.incident_id_changed === '1') flags.push('ID Changed')
-                const unknownCount = UNKNOWN_REVIEW_FIELDS.filter(f => row[f] === 'Unknown').length
-                if (unknownCount > 0) flags.push(`Unknown (${unknownCount} field${unknownCount !== 1 ? 's' : ''})`)
-                const detail = (row.CaseSummary && row.CaseSummary !== 'NA' && row.CaseSummary !== PENDING)
-                  ? row.CaseSummary
-                  : '—'
-                const groupIdx = incidentGroups.findIndex(g => g.indices.includes(idx))
-                return (
-                  <tr
-                    key={idx}
-                    style={{ cursor: groupIdx !== -1 ? 'pointer' : undefined }}
-                    title={groupIdx !== -1 ? 'Click to navigate to this incident' : undefined}
-                    onClick={() => { if (groupIdx !== -1) navigateTo(groupIdx) }}
-                  >
-                    <td>{idx + 1}</td>
-                    <td><code>{row[config.idColumn]}</code></td>
-                    <td>{flags.join(', ')}</td>
-                    <td className="pi-review-detail">{detail}</td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
 
       {/* ── New Incident form ── */}
       {showNewIncidentForm && (
@@ -425,6 +441,7 @@ export default function SampleTable({
               isAddedRow={row.record_added === '1'}
               onAddCase={() => handleAddCaseUnderIncident(globalIdx)}
               onDeleteCase={() => handleDeleteCustomCase(globalIdx)}
+              onSave={handleSave}
             />
           )
         })}
@@ -433,20 +450,66 @@ export default function SampleTable({
       {/* ── Bottom incident nav ── */}
       <NavBar showStatus={false} />
 
-      {/* ── Submit footer ── */}
-      <div className="submit-footer">
-        {!allComplete && (
-          <span className="incomplete-warning">
-            {incompleteCount} row{incompleteCount !== 1 ? 's' : ''} still incomplete
-          </span>
-        )}
-        <button
-          className="btn btn-primary"
-          onClick={handleSubmit}
-          style={{ marginLeft: allComplete ? 0 : 'auto' }}
-        >
-          {alreadySubmitted ? 'Resubmit (Download Updated CSV)' : 'Submit (Download CSV)'}
-        </button>
+
+      {/* ── Finalize blocked modal ── */}
+      {showBlockedModal && (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ background: '#fff', borderRadius: '8px', padding: '2rem', maxWidth: '420px', width: '90%', boxShadow: '0 8px 32px rgba(0,0,0,0.25)' }}>
+            <h3 style={{ marginTop: 0, marginBottom: '1rem' }}>Cannot Finalize</h3>
+            <p style={{ lineHeight: 1.6, marginBottom: '1.25rem' }}>
+              Data cannot be finalized and submitted until all case coding is completed.
+            </p>
+            <p style={{ lineHeight: 1.6, marginBottom: '1.75rem' }}>
+              Click <strong style={{ color: '#3b82f6' }}>Status Tracker</strong> to see coding status of all cases. Resolve{' '}
+              <i className="bi bi-file-x-fill" style={{ color: '#e53e3e', fontSize: '1rem', verticalAlign: 'middle' }} />{' '}
+              cases to enable FINALIZE.
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button className="btn btn-primary" onClick={() => setShowBlockedModal(false)}>
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Finalize confirmation modal ── */}
+      {showFinalizeModal && (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ background: '#fff', borderRadius: '8px', padding: '2rem', maxWidth: '480px', width: '90%', boxShadow: '0 8px 32px rgba(0,0,0,0.25)' }}>
+            <h3 style={{ marginTop: 0, marginBottom: '1rem' }}>Finalize &amp; Submit</h3>
+            <p style={{ marginBottom: '1.5rem', lineHeight: 1.6 }}>
+              This will finalize all data you have input and submit for PI review.{' '}
+              <strong>You will not be able to edit your coding if you proceed.</strong>
+            </p>
+            <p style={{ marginBottom: '1.75rem', lineHeight: 1.6 }}>
+              If you have not reviewed your data coding and made final edits, select{' '}
+              <strong>Cancel</strong>. If you are ready to finalize and submit your coding, click{' '}
+              <strong style={{ color: '#b8860b' }}>SUBMIT</strong>.
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+              <button
+                className="btn btn-primary"
+                onClick={() => setShowFinalizeModal(false)}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => { setShowFinalizeModal(false); handleSubmit() }}
+                style={{ backgroundColor: '#b8860b', color: '#fff', border: 'none', fontWeight: 700, letterSpacing: '0.06em', padding: '0.4rem 1.25rem', borderRadius: '4px', cursor: 'pointer', fontSize: '0.95rem' }}
+              >
+                SUBMIT
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Page footer ── */}
+      <div style={{ textAlign: 'center', padding: '1.5rem 1rem', fontSize: '0.8rem', color: '#aaa', borderTop: '1px solid #e2e8f0', marginTop: '2rem' }}>
+        <a href="/GVA_Project_Onboarding.pdf" target="_blank" rel="noopener noreferrer" className="coding-guide-link">
+          Coding Guide ↗
+        </a>
       </div>
 
       {/* ── Incident Overview drawer ── */}
