@@ -6,17 +6,17 @@ const PENDING = 'PENDING'
 // ── Tooltip content (sourced from GVA_Project_Onboarding) ────────────────────
 
 const COLUMN_INFO = {
-  Status2: `Was the officer fatally or non-fatally wounded by the shooting?\n\nFatal — officer died from gunshot wounds. Use this even if death was initially uncertain but later confirmed.\nNon-fatal — officer was wounded but survived.\nUnknown — outcome cannot be confirmed from available sources. Selecting this flags the case for PI review.\n\nEdge cases:\n• Shrapnel / fragmented bullet: if an officer was struck by shrapnel from a gunshot, code as wounded (Fatal or Non-fatal based on outcome).\n• Vehicle strikes / ramming: these are NOT shootings — these cases should not be in the dataset.\n• Armor / equipment strikes: if a bullet struck a vest or equipment and the officer was not physically wounded, this is typically not a qualifying shooting — flag for PI review.\n• If initially reported injured but later died from those wounds, code Fatal.`,
+  Status2: `Was the officer fatally or non-fatally wounded by the shooting?\n\nFatal — officer died from gunshot wounds. Use this even if death was initially uncertain but later confirmed.\nNon-fatal — officer was wounded but survived.\nNo injury — the person was present but not physically injured (e.g., a bullet struck their vest or equipment with no bodily harm). Use this when the officer was not physically wounded.\nUnknown — outcome cannot be confirmed from available sources. Selecting this flags the case for PI review.\n\nEdge cases:\n• Shrapnel / fragmented bullet: if an officer was struck by shrapnel from a gunshot, code as wounded (Fatal or Non-fatal based on outcome).\n• Vehicle strikes / ramming: these are NOT shootings — these cases should not be in the dataset.\n• Armor / equipment strikes: if a bullet struck a vest or equipment and the officer was not physically wounded, code No injury.\n• If initially reported injured but later died from those wounds, code Fatal.`,
 
-  agencytype: `What kind of law enforcement agency does this officer work for?\n\n• Local — city or county police department\n• Sheriff — sheriff's office\n• State — state police or highway patrol\n• Special — a special-jurisdiction agency: transit police, campus/university police, tribal police, park police, housing authority, airport, etc. Select Special and specify the type in the box.\n• Federal — FBI, DEA, ATF, U.S. Marshals, etc.\n• Corrections — jail or prison staff.\n• Unknown — only if you genuinely cannot determine it after checking all sources.`,
+  agencytype: `What kind of law enforcement agency does this officer work for?\n\n• Local — city or county police department\n• Sheriff — sheriff's office\n• State — state police or highway patrol\n• Special — a special-jurisdiction agency: transit police, campus/university police, tribal police, park police, housing authority, airport, etc. Select Special and specify the type in the box.\n• Federal — FBI, DEA, ATF, U.S. Marshals, etc.\n• Corrections — jail or prison staff.\n• None — the injured person has no law enforcement agency affiliation. Usually means Active/Sworn = No (i.e., they are not an officer).\n• Unknown — only if you genuinely cannot determine it after checking all sources.`,
 
-  agencyname: `Full official name of the agency (e.g., "Chicago Police Department", "Cook County Sheriff's Office", "Illinois State Police").\n\nUse Unknown if you can't confirm the exact name after checking sources.`,
+  agencyname: `Full official name of the agency (e.g., "Chicago Police Department", "Cook County Sheriff's Office", "Illinois State Police").\n\nUse N/A if the person has no agency — this usually means Active/Sworn = No (they are not an officer).\nUse Unknown if the person is an officer but you can't confirm the agency name after checking sources.`,
 
-  type_new: `Classify the shooting in two steps.\n\nStep 1 — Who fired the shot?\n• Suspect-inflicted — a suspect shot the officer (no second step needed)\n• Self-inflicted — the officer shot themselves\n• Blue-on-blue — another on-duty officer shot this officer\n• Unknown — cannot determine; flags for PI review\n\nStep 2 — subtype (required for Self-inflicted and Blue-on-blue)\nSelf-inflicted: Accidental · Intentional/Suicide · Unknown\nBlue-on-blue: Accidental · Suspect-inflicted · Unknown`,
+  type_new: `Classify the shooting in two steps.\n\nStep 1 — Who fired the shot?\n• Suspect-inflicted — a suspect shot the officer (no second step needed)\n• Self-inflicted — the officer shot themselves\n• Blue-on-blue — another on-duty officer shot this officer\n• None — there was no shooting of an officer. Use this when a person was injured another way (e.g., vehicle strike, stabbing) — this is not a qualifying shooting event.\n• Unknown — cannot determine; flags for PI review\n\nStep 2 — subtype (required for Self-inflicted and Blue-on-blue)\nSelf-inflicted: Accidental · Intentional/Suicide · Unknown\nBlue-on-blue: Accidental · Suspect-inflicted · Unknown`,
 
   notactiveswornlocalstate: `Is this officer currently active duty and sworn — meaning they hold full arrest powers and are not retired?\n\n• Yes — active duty, sworn officer with full arrest powers\n• No — not sworn, or retired. Examples: retired officers who intervened in an incident, unsworn police employees (e.g., crime scene technicians, civilian dispatchers)\n• Unknown — can't confirm from sources; flags for PI review`,
 
-  rank: `Officer's rank as reported in the sources.\n\nCommon values: Officer, Deputy, Sergeant, Detective, Trooper, Corporal, Lieutenant, Captain, Sheriff, Police Chief, Marshal.\n\nUse Unknown if rank isn't mentioned in any source.`,
+  rank: `Officer's rank as reported in the sources.\n\nCommon values: Officer, Deputy, Sergeant, Detective, Trooper, Corporal, Lieutenant, Captain, Sheriff, Police Chief, Marshal.\n\nUse N/A if the person has no rank — this usually means Active/Sworn = No (they are not an officer).\nUse Unknown if the person is an officer but their rank isn't mentioned in any source.`,
 
   offduty: `Was the officer shot while off the clock?\n\nOff-duty means the officer was still employed but not working at the time of the incident. Do not use this for retired officers — use Active, Sworn instead.\n\nMark Unknown if you can't confirm from sources — flags for PI review.`,
 
@@ -176,14 +176,11 @@ const SOURCE_DISPLAY_FIELDS = [
   { name: 'Type',         label: 'Type (GVA)' },
 ]
 
-// Fields that require Notes explanation when non-zero / non-NA
-const INTEGRITY_FIELDS = [
-  'Duplicate', 'duplicate_type', 'duplicate_of',
-  'record_added', 'incident_id_changed', 'incident_change_type', 'reassign_to_id', 'original_id',
-]
+// Primary flags that require Case Summary explanation when set to '1'
+const INTEGRITY_FIELDS = ['Duplicate', 'record_added', 'incident_id_changed']
 
 // ── Shooting Type (type_new) two-dropdown structure ───────────────────────────
-const TYPE_NEW_PRIMARY   = ['Suspect-inflicted', 'Self-inflicted', 'Blue-on-blue', 'Unknown']
+const TYPE_NEW_PRIMARY   = ['Suspect-inflicted', 'Self-inflicted', 'Blue-on-blue', 'None', 'Unknown']
 const TYPE_NEW_SECONDARY = {
   'Self-inflicted': ['Accidental', 'Intentional/Suicide', 'Unknown'],
   'Blue-on-blue':   ['Accidental', 'Suspect-inflicted', 'Unknown'],
@@ -226,7 +223,7 @@ function getActiveTriggerLabels(rowState) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function CodingRow({ row, config, onChange, rowIndex, dataIndex, allRows, isAddedRow, onAddCase, onDeleteCase }) {
+export default function CodingRow({ row, config, onChange, rowIndex, dataIndex, allRows, isAddedRow, onAddCase, onDeleteCase, onConfirmCase, isConfirmed, flaggedFields = new Set(), onSave }) {
   const isComplete = isRowComplete(row)
 
   // Wraps onChange to auto-manage ToRemove and warn on manual override
@@ -254,10 +251,8 @@ export default function CodingRow({ row, config, onChange, rowIndex, dataIndex, 
   }
 
   // Data integrity check: any integrity fields set to non-default values?
-  const hasIntegrityFlags = INTEGRITY_FIELDS.some(field => {
-    const val = row[field]
-    return val && val !== '0' && val !== 'NA' && val !== PENDING && val !== ''
-  })
+  const triggeredIntegrityFields = INTEGRITY_FIELDS.filter(field => row[field] === '1')
+  const hasIntegrityFlags = triggeredIntegrityFields.length > 0
   const hasCaseSummary = row.CaseSummary && row.CaseSummary !== 'NA' && row.CaseSummary !== PENDING && row.CaseSummary.trim() !== ''
   const needsExplanation = hasIntegrityFlags && !hasCaseSummary
 
@@ -276,21 +271,36 @@ export default function CodingRow({ row, config, onChange, rowIndex, dataIndex, 
           <span className="explanation-needed">⚠ Document data change in Case Summary</span>
         )}
         {isAddedRow && (
-          <button
-            type="button"
-            className="btn btn-danger"
-            onClick={onDeleteCase}
-            style={{ marginLeft: 'auto', fontSize: '0.75rem', padding: '0.15rem 0.6rem' }}
-          >
-            Delete Custom Case
-          </button>
+          <span style={{ marginLeft: 'auto', display: 'inline-flex', gap: '0.5rem', alignItems: 'center' }}>
+            {isConfirmed ? (
+              <span style={{ fontSize: '0.75rem', color: '#276749', fontWeight: 600 }}>✓ Confirmed</span>
+            ) : (
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={onConfirmCase}
+                style={{ fontSize: '0.75rem', padding: '0.15rem 0.6rem' }}
+              >
+                Confirm Custom Case
+              </button>
+            )}
+            <button
+              type="button"
+              className="btn btn-danger"
+              onClick={onDeleteCase}
+              style={{ fontSize: '0.75rem', padding: '0.15rem 0.6rem' }}
+            >
+              Delete Custom Case
+            </button>
+          </span>
         )}
       </div>
 
       {/* Data integrity warning banner */}
       {needsExplanation && (
         <div className="integrity-warning">
-          One or more data integrity fields are set (Duplicate, record_added, incident_id_changed, etc.).
+          Data integrity field{triggeredIntegrityFields.length > 1 ? 's' : ''} set:{' '}
+          <strong>{triggeredIntegrityFields.join(', ')}</strong>.{' '}
           Please document what changed and why in the <strong>Case Summary</strong> field below.
         </div>
       )}
@@ -350,6 +360,7 @@ export default function CodingRow({ row, config, onChange, rowIndex, dataIndex, 
                 row={row}
                 onChange={handleChange}
                 isKey={keySet.has(name)}
+                isFlagged={flaggedFields.has(name)}
               />
             )
           })
@@ -360,6 +371,12 @@ export default function CodingRow({ row, config, onChange, rowIndex, dataIndex, 
 
         {/* Notes — additional URLs, source discrepancies, PI flag notes */}
         <NotesField value={row.Notes} onChange={handleChange} />
+
+        {onSave && (
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gridColumn: '1 / -1', marginTop: '0.25rem' }}>
+            <button className="btn btn-primary" onClick={onSave}>Save</button>
+          </div>
+        )}
       </div>
 
       {/* Section C — Duplicate / Missing / Custom Cases (collapsible) */}
@@ -378,27 +395,27 @@ export default function CodingRow({ row, config, onChange, rowIndex, dataIndex, 
 
 // ── CodedField ────────────────────────────────────────────────────────────────
 
-function CodedField({ col, value, row, onChange, isKey }) {
+function CodedField({ col, value, row, onChange, isKey, isFlagged = false }) {
   const isPending = !value || value === PENDING
 
   // ── agencytype: Special (X) → compound field ──────────────────────────────
   if (col.name === 'agencytype') {
-    return <AgencyTypeField col={col} value={value} onChange={onChange} isKey={isKey} />
+    return <AgencyTypeField col={col} value={value} onChange={onChange} isKey={isKey} isFlagged={isFlagged} />
   }
 
   // ── agencyname: free text + Unknown toggle ────────────────────────────────
   if (col.name === 'agencyname') {
-    return <AgencyNameField col={col} value={value} onChange={onChange} isKey={isKey} />
+    return <AgencyNameField col={col} value={value} onChange={onChange} isKey={isKey} isFlagged={isFlagged} />
   }
 
   // ── rank: free text + Unknown toggle ──────────────────────────────────────
   if (col.name === 'rank') {
-    return <RankField col={col} value={value} onChange={onChange} isKey={isKey} />
+    return <RankField col={col} value={value} onChange={onChange} isKey={isKey} isFlagged={isFlagged} />
   }
 
   // ── type_new: add "Other (specify)" option ────────────────────────────────
   if (col.name === 'type_new') {
-    return <TypeNewField col={col} value={value} onChange={onChange} isKey={isKey} />
+    return <TypeNewField col={col} value={value} onChange={onChange} isKey={isKey} isFlagged={isFlagged} />
   }
 
   // ── ErrorDetail is handled separately outside this component ──────────────
@@ -415,6 +432,7 @@ function CodedField({ col, value, row, onChange, isKey }) {
           value={isPending ? '' : value}
           onChange={e => onChange(col.name, e.target.value || PENDING)}
           className={isPending ? 'pending' : ''}
+          style={isFlagged ? { border: '2px solid #e53e3e' } : {}}
         >
           <option value="">— select —</option>
           {col.values.map(v => (
@@ -436,6 +454,7 @@ function CodedField({ col, value, row, onChange, isKey }) {
         type="text"
         value={value === 'NA' || value == null || value === PENDING ? '' : value}
         onChange={e => onChange(col.name, e.target.value || 'NA')}
+        style={isFlagged ? { border: '2px solid #e53e3e' } : {}}
         placeholder="NA"
       />
     </div>
@@ -444,9 +463,24 @@ function CodedField({ col, value, row, onChange, isKey }) {
 
 // ── AgencyNameField ───────────────────────────────────────────────────────────
 
-function AgencyNameField({ col, value, onChange, isKey }) {
+function AgencyNameField({ col, value, onChange, isKey, isFlagged = false }) {
   const isUnknown = value === 'Unknown'
+  const isNA      = value === 'N/A'
+  const isLocked  = isUnknown || isNA
   const isPending = !value || value === PENDING
+  const flagStyle = isFlagged ? { border: '2px solid #e53e3e' } : {}
+  const lockedStyle = { background: '#f5f5f5', color: '#888', fontStyle: 'italic', ...flagStyle }
+  const toggleBtnStyle = active => ({
+    marginTop: '0.2rem',
+    background: 'none',
+    border: 'none',
+    padding: 0,
+    fontSize: '0.78rem',
+    color: active ? '#1a56db' : '#888',
+    cursor: 'pointer',
+    textDecoration: 'underline',
+    textAlign: 'left',
+  })
 
   return (
     <div className="coded-field">
@@ -456,39 +490,51 @@ function AgencyNameField({ col, value, onChange, isKey }) {
       </label>
       <input
         type="text"
-        value={isUnknown ? 'Unknown' : (isPending ? '' : value)}
+        value={isUnknown ? 'Unknown' : isNA ? 'N/A' : (isPending ? '' : value)}
         onChange={e => onChange(col.name, e.target.value || PENDING)}
         placeholder="e.g. Chicago Police Department"
-        disabled={isUnknown}
-        className={isPending && !isUnknown ? 'pending' : ''}
-        style={isUnknown ? { background: '#f5f5f5', color: '#888', fontStyle: 'italic' } : {}}
+        disabled={isLocked}
+        className={isPending && !isLocked ? 'pending' : ''}
+        style={isLocked ? lockedStyle : flagStyle}
       />
-      <button
-        type="button"
-        onClick={() => onChange(col.name, isUnknown ? PENDING : 'Unknown')}
-        style={{
-          marginTop: '0.2rem',
-          background: 'none',
-          border: 'none',
-          padding: 0,
-          fontSize: '0.78rem',
-          color: isUnknown ? '#1a56db' : '#888',
-          cursor: 'pointer',
-          textDecoration: 'underline',
-          textAlign: 'left',
-        }}
-      >
-        {isUnknown ? 'Clear — enter Agency Name' : 'Mark as Unknown'}
-      </button>
+      <div style={{ display: 'flex', gap: '0.75rem' }}>
+        <button type="button"
+          onClick={() => onChange(col.name, isUnknown ? PENDING : 'Unknown')}
+          style={toggleBtnStyle(isUnknown)}
+        >
+          {isUnknown ? 'Clear Unknown' : 'Mark as Unknown'}
+        </button>
+        <button type="button"
+          onClick={() => onChange(col.name, isNA ? PENDING : 'N/A')}
+          style={toggleBtnStyle(isNA)}
+        >
+          {isNA ? 'Clear N/A' : 'Mark as N/A'}
+        </button>
+      </div>
     </div>
   )
 }
 
 // ── RankField ─────────────────────────────────────────────────────────────────
 
-function RankField({ col, value, onChange, isKey }) {
+function RankField({ col, value, onChange, isKey, isFlagged = false }) {
   const isUnknown = value === 'Unknown'
+  const isNA      = value === 'N/A'
+  const isLocked  = isUnknown || isNA
   const isPending = !value || value === PENDING
+  const flagStyle = isFlagged ? { border: '2px solid #e53e3e' } : {}
+  const lockedStyle = { background: '#f5f5f5', color: '#888', fontStyle: 'italic', ...flagStyle }
+  const toggleBtnStyle = active => ({
+    marginTop: '0.2rem',
+    background: 'none',
+    border: 'none',
+    padding: 0,
+    fontSize: '0.78rem',
+    color: active ? '#1a56db' : '#888',
+    cursor: 'pointer',
+    textDecoration: 'underline',
+    textAlign: 'left',
+  })
 
   return (
     <div className="coded-field">
@@ -498,37 +544,34 @@ function RankField({ col, value, onChange, isKey }) {
       </label>
       <input
         type="text"
-        value={isUnknown ? 'Unknown' : (isPending ? '' : value)}
+        value={isUnknown ? 'Unknown' : isNA ? 'N/A' : (isPending ? '' : value)}
         onChange={e => onChange(col.name, e.target.value || PENDING)}
         placeholder="e.g. Officer, Detective, Sergeant…"
-        disabled={isUnknown}
-        className={isPending && !isUnknown ? 'pending' : ''}
-        style={isUnknown ? { background: '#f5f5f5', color: '#888', fontStyle: 'italic' } : {}}
+        disabled={isLocked}
+        className={isPending && !isLocked ? 'pending' : ''}
+        style={isLocked ? lockedStyle : flagStyle}
       />
-      <button
-        type="button"
-        onClick={() => onChange(col.name, isUnknown ? PENDING : 'Unknown')}
-        style={{
-          marginTop: '0.2rem',
-          background: 'none',
-          border: 'none',
-          padding: 0,
-          fontSize: '0.78rem',
-          color: isUnknown ? '#1a56db' : '#888',
-          cursor: 'pointer',
-          textDecoration: 'underline',
-          textAlign: 'left',
-        }}
-      >
-        {isUnknown ? 'Clear — enter Rank' : 'Mark as Unknown'}
-      </button>
+      <div style={{ display: 'flex', gap: '0.75rem' }}>
+        <button type="button"
+          onClick={() => onChange(col.name, isUnknown ? PENDING : 'Unknown')}
+          style={toggleBtnStyle(isUnknown)}
+        >
+          {isUnknown ? 'Clear Unknown' : 'Mark as Unknown'}
+        </button>
+        <button type="button"
+          onClick={() => onChange(col.name, isNA ? PENDING : 'N/A')}
+          style={toggleBtnStyle(isNA)}
+        >
+          {isNA ? 'Clear N/A' : 'Mark as N/A'}
+        </button>
+      </div>
     </div>
   )
 }
 
 // ── AgencyTypeField ───────────────────────────────────────────────────────────
 
-function AgencyTypeField({ col, value, onChange, isKey }) {
+function AgencyTypeField({ col, value, onChange, isKey, isFlagged = false }) {
   const isPending = !value || value === PENDING
 
   // Detect if current value is a Special variant: "Special (Something)"
@@ -564,6 +607,7 @@ function AgencyTypeField({ col, value, onChange, isKey }) {
         value={selectValue}
         onChange={handleSelectChange}
         className={isPending ? 'pending' : ''}
+        style={isFlagged ? { border: '2px solid #e53e3e' } : {}}
       >
         <option value="">— select —</option>
         {col.values.map(v => (
@@ -586,7 +630,7 @@ function AgencyTypeField({ col, value, onChange, isKey }) {
 
 // ── TypeNewField ──────────────────────────────────────────────────────────────
 
-function TypeNewField({ col, value, onChange, isKey }) {
+function TypeNewField({ col, value, onChange, isKey, isFlagged = false }) {
   const { primary, secondary } = parseTypeNew(value)
   const isPending = !value || value === PENDING
   const needsSecondary = TYPE_NEW_NEEDS_SECONDARY.has(primary)
@@ -621,6 +665,7 @@ function TypeNewField({ col, value, onChange, isKey }) {
         value={isPending ? '' : primary}
         onChange={handlePrimaryChange}
         className={isPending ? 'pending' : ''}
+        style={isFlagged ? { border: '2px solid #e53e3e' } : {}}
       >
         <option value="">— select —</option>
         {TYPE_NEW_PRIMARY.map(v => (

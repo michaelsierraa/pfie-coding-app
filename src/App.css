@@ -128,12 +128,10 @@ body {
   z-index: 10;
   background: #fff;
   border-bottom: 2px solid #ddd;
-  padding: 0.75rem 1.25rem 0.6rem;
+  padding: 0.75rem 1.25rem 0.5rem;
   display: flex;
-  align-items: center;
-  gap: 1.5rem;
-  flex-wrap: wrap;
-  position: relative;
+  flex-direction: column;
+  gap: 0.4rem;
 }
 
 .header-progress-bar {
@@ -143,7 +141,9 @@ body {
   right: 0;
   height: 3px;
   background: #e5e7eb;
+  pointer-events: none;
 }
+
 
 .header-progress-fill {
   height: 100%;
@@ -181,13 +181,15 @@ body {
 .autosave-indicator {
   font-size: 0.8rem;
   color: #888;
-  margin-left: auto;
+  text-align: center;
 }
 
 .table-actions {
   display: flex;
   gap: 0.5rem;
   align-items: center;
+  width: 100%;
+  flex-wrap: wrap;
 }
 
 /* ── Coding rows ── */
@@ -954,6 +956,7 @@ body {
 
 .ov-body {
   flex: 1;
+  min-height: 0;        /* required: lets flex child shrink below content size */
   overflow-y: auto;
 }
 
@@ -990,7 +993,7 @@ body {
 .ov-row.ov-row-current:hover { background: #dbeafe; }
 
 .ov-row td {
-  padding: 0.45rem 0.65rem;
+  padding: 0.28rem 0.65rem;
   vertical-align: middle;
 }
 
@@ -1034,12 +1037,19 @@ body {
 /* ── Overview filter bar ── */
 .ov-filterbar {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
+  flex-direction: column;
+  gap: 0.4rem;
   padding: 0.45rem 0.75rem;
   border-bottom: 1px solid #e5e7eb;
   background: #fafafa;
   flex-shrink: 0;
+}
+
+.ov-filterbar-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: nowrap;
 }
 
 .ov-state-filter {

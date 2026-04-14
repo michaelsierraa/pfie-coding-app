@@ -322,9 +322,7 @@ export default function SampleTable({
           </span>
         </div>
 
-        {saveLabel && <div className="autosave-indicator">{saveLabel}</div>}
-
-        <div className="table-actions">
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.35rem' }}>
           <button
             className="btn btn-secondary"
             onClick={() => setShowOverview(true)}
@@ -333,10 +331,11 @@ export default function SampleTable({
             <i className="bi bi-list-check" style={{ marginRight: '0.35rem' }} />
             Status Tracker
           </button>
-          <button className="btn btn-primary" onClick={handleSave}>
-            <i className="bi bi-floppy-fill" style={{ marginRight: '0.35rem' }} />
-            Save
-          </button>
+          {saveLabel && <div className="autosave-indicator">{saveLabel}</div>}
+        </div>
+
+        <div className="table-actions">
+
           <button
             className="btn btn-secondary"
             onClick={handleUndo}
